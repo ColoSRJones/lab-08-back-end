@@ -1,0 +1,29 @@
+
+{
+  "name": "city-explorer",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "watch": "nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Clownvin/city-explorer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Clownvin/city-explorer/issues"
+  },
+  "homepage": "https://github.com/Clownvin/city-explorer#readme",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^8.1.0",
+    "express": "^4.17.1",
+	"pg": "^7.12.1",
+    "superagent": "^5.1.0"
+  }
+}
