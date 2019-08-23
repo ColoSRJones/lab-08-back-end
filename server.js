@@ -13,25 +13,25 @@ const app = express();
 app.use(cors());
 
 app.get('/location', getLocation);
-app.get('/events', getEvents);
+app.get('/event', getEvents);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelps);
-app.get('/movies', getMovies);
+app.get('/movie', getMovies);
 
 const timeouts = {
-	weather: 15000,
-	yelp: 15000,
-	movies: 15000,
-	events: 15000,
+  weather: 15000,
+  yelp: 15000,
+  movies: 15000,
+  events: 15000,
 }
 
 function convertTime(timeInMilliseconds) {
-	return new Date(timeInMilliseconds).toString().slice(0, 15);
+  return new Date(timeInMilliseconds).toString().slice(0, 15);
 }
 
 function Location(query, geoData) {
-	this.search_query = query;
-	this.formatted_query = geoData.results[0].formatted_address;
+  this.search_query = query;
+  this.formatted_query = geoData.results[0].formatted_address;
 	this.latitude = geoData.results[0].geometry.location.lat;
 	this.longitude = geoData.results[0].geometry.location.lng;
 }
@@ -55,17 +55,33 @@ function Weather(weatherData) {
 Weather.prototype.save = function (location_id) {
 	const SQL = 'INSERT INTO weather (forecast, time, created_at, location_id) VALUES($1, $2, $3, $4)';
 
-	const VALUES = [this.forecast, this.time, this.created_at, this.location_id];
+	const VALUES = [this.forecast, this.time, this.created_at, location_id];
 
 	client.query(SQL, VALUES);
 }
 
 function Event(query, url, name, date, summary) {
-	this.search_query = query;
-	this.link = url;
-	this.name = name;
-	this.event_date = date;
-	this.summary = summary;
+  this.search_query = query;
+  this.link = url;
+  this.name = name;
+  this.event_date = date;
+  this.summary = summary;
+}
+
+function Yelp(query, url, name, date, summary) {
+  this.search_query = query;
+  this.link = url;
+  this.name = name;
+  this.event_date = date;
+  this.summary = summary;
+}
+
+function Movie(query, url, name, date, summary) {
+  this.search_query = query;
+  this.link = url;
+  this.name = name;
+  this.event_date = date;
+  this.summary = summary;
 }
 
 function handleError(error, response) {
@@ -117,17 +133,17 @@ function getWeather(req, res) {
 	lookupData({
 		tableName: 'weather',
 		column: 'location_id',
-		query: req.query.data.location_id,
+		query: req.query.data.id,
 
-		cacheHit: function () {
-			let ageOfResults = (Date.now() - res.rows[0].created_at);
+		cacheHit: function (result) {
+			let ageOfResults = (Date.now() - result.rows[0].created_at);
 			if (ageOfResults > timeouts.weather) {
-				deleteData('weather', req.query.data.location_id).then(() => {
+				deleteData('weather', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
 
 			} else {
-				res.send(res.rows);
+				res.send(result.rows);
 			}
 		},
 
@@ -136,32 +152,124 @@ function getWeather(req, res) {
 
 			superagent.get(url)
 				.then(weatherData => {
-					const weatherSummaries = weatherData.body.daily.data.map(day) => {
+					const weatherSummaries = weatherData.body.daily.data.map(day => {
 						const summary = new Weather(day);
 						summary.save(req.query.data.id);
 						return summary;
-					}
-				});
-			res.send(weatherSummaries);
-		}
+					});				
+			res.send(weatherSummaries);				})
+	}
 	})
 }
 
 function getEvents(req, res) {
+	lookupData({
+		tableName: 'events',
+		//this is because in schema we modified table to have a location_id column to make the tables relational.
+		column: 'location_id',
+		query: req.query.data.id,
 
+
+
+		cacheHit: function (result) {
+			let eventsResults = (Date.now() - result.rows[0].created_at);
+			if(eventsResults > timeouts.events) {
+				deleteData('event', req.query.data.id).then(() => {
+					this.cacheMiss();
+				})
+
+			} else {
+				res.send(result.rows);
+			}
+		},
+
+		cacheMiss: function () {
+			const url = 'https://www.eventbriteapi.com/v3/events/search?token=${process.env.EVENTBRITE_API_KEY}&location.address=${request.query.data.formatted_query}'
+
+			superagent.get(url)
+				.then(eventData => {
+					const eventSummaries = eventData.body.date.data.map(date => {
+						const summary = new Event(date);
+						summary.save(req.query.data.id);
+						return summary;
+					});				
+			res.send(eventSummaries);				})
+	}
+	})
 }
 
-function getYelps(req, res) {
 
+function getYelps(req, res) {
+		lookupData({
+		tableName: 'yelps',
+		//this is because in schema we modified table to have a location_id column to make the tables relational.
+		column: 'location_id',
+		query: req.query.data.id,
+
+				cacheHit: function (result) {
+			let yelpsResults = (Date.now() - result.rows[0].created_at);
+			if(yelpsResults > timeouts.yelps) {
+				deleteData('yelp', req.query.data.id).then(() => {
+					this.cacheMiss();
+				})
+
+			} else {
+				res.send(result.rows);
+			}
+		},
+
+		cacheMiss: function () {
+			const url = 'https://api.yelp.com/v3/businesses/search?location=${request.query.data.search_query}'
+
+			superagent.get(url)
+				.then(yelpData => {
+					const yelpSummaries = yelpData.body.date.data.map(date => {
+						const summary = new Yelp(date);
+						summary.save(req.query.data.id);
+						return summary;
+					});				
+			res.send(yelpSummaries);				})
+	}
+	})
 }
 
 function getMovies(req, res) {
+	lookupData({
+		tableName: 'movie',
+		//this is because in schema we modified table to have a location_id column to make the tables relational.
+		column: 'location_id',
+		query: req.query.data.id,
 
+				cacheHit: function (result) {
+			let moviesResults = (Date.now() - result.rows[0].created_at);
+			if(moviesResults > timeouts.movies) {
+				deleteData('movie', req.query.data.id).then(() => {
+					this.cacheMiss();
+				})
+
+			} else {
+				res.send(result.rows);
+			}
+		},
+
+		cacheMiss: function () {
+			const url = 'https://api.themoviedb.org/3/search/movie/?api_key=${process.env.MOVIE_API_KEY}&language=en-US&page=1&query=${request.query.data.search_query}'
+
+			superagent.get(url)
+				.then(movieData => {
+					const movieSummaries = movieData.body.date.data.map(date => {
+						const summary = new Movie(date);
+						summary.save(req.query.data.id);
+						return summary;
+					});				
+			res.send(movieSummaries);				})
+	}
+	})
 }
 
 
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-	console.log('Server has started...');
+  console.log(`Server is listening on ${PORT}`);
 });
