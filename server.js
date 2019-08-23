@@ -19,19 +19,19 @@ app.get('/yelp', getYelps);
 app.get('/movie', getMovies);
 
 const timeouts = {
-  weather: 15000,
-  yelp: 15000,
-  movies: 15000,
-  events: 15000,
+	weather: 15000,
+	yelp: 15000,
+	movies: 15000,
+	events: 15000,
 }
 
 function convertTime(timeInMilliseconds) {
-  return new Date(timeInMilliseconds).toString().slice(0, 15);
+	return new Date(timeInMilliseconds).toString().slice(0, 15);
 }
 
 function Location(query, geoData) {
-  this.search_query = query;
-  this.formatted_query = geoData.results[0].formatted_address;
+	this.search_query = query;
+	this.formatted_query = geoData.results[0].formatted_address;
 	this.latitude = geoData.results[0].geometry.location.lat;
 	this.longitude = geoData.results[0].geometry.location.lng;
 }
@@ -60,36 +60,54 @@ Weather.prototype.save = function (location_id) {
 	client.query(SQL, VALUES);
 }
 
-function Event(query, url, name, date, summary) {
-  this.search_query = query;
-  this.link = url;
-  this.name = name;
-  this.event_date = date;
-  this.summary = summary;
+function Event(eventData) {
+	this.link = eventData.url;
+	this.name = eventData.name;
+	this.event_date = eventData.date;
+	this.summary = eventData.summary;
+}
+Event.prototype.save = function(location_id){
+ const SQL = 'INSERT INTO event (link, name, event_date, summary, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6)';
+ const VALUES = [this.link, this.name, this.event_date, this.summary, this.created_at, location_id];
+ client.query(SQL, VALUES);
 }
 
-function Yelp(query, url, name, date, summary) {
-  this.search_query = query;
-  this.link = url;
-  this.name = name;
-  this.event_date = date;
-  this.summary = summary;
+function Yelp(yelpData) {
+	created_at = Date.now();
+	this.name = yelpData.name;
+	this.image_url = yelpData.image_url;
+	this.price = yelpData.price;
+	this.rating = yelpData.rating;
+	this.url = yelpData.url;
+}
+Yelp.prototype.save = function(location_id){
+ const SQL = 'INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7)';
+ const VALUES = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
+ client.query(SQL, VALUES);
 }
 
-function Movie(query, url, name, date, summary) {
-  this.search_query = query;
-  this.link = url;
-  this.name = name;
-  this.event_date = date;
-  this.summary = summary;
+
+function Movie(movieData) {
+	this.title = movieData.title;
+	this.overview = movieData.overview;
+	this.average_votes = movieData.average_votes;
+	this.total_votes = movieData.total_votes;
+	this.image_url = movieData.image_url;
+	this.popularity = movieData.popularity;
+	this.release_on = movieData.release_on
+}
+Movie.prototype.save = function(location_id){
+ const SQL = 'INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, release_on created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)';
+ const VALUES = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.release_on,this.created_at, location_id];
+ client.query(SQL, VALUES);
 }
 
 function handleError(error, response) {
 	response.status(error.status || 500).send(error.message);
 }
 
-function deleteData(tableName, location_id){
-	const SQL = 'DELETE FROM ${table} WHERE location_id=$1'
+function deleteData(tableName, location_id) {
+	const SQL = 'DELETE FROM ${table} WHERE location_id=$1',
 	const VALUES = [location_id];
 	return client.query(SQL, VALUES);
 }
@@ -156,9 +174,10 @@ function getWeather(req, res) {
 						const summary = new Weather(day);
 						summary.save(req.query.data.id);
 						return summary;
-					});				
-			res.send(weatherSummaries);				})
-	}
+					});
+					res.send(weatherSummaries);
+				})
+		}
 	})
 }
 
@@ -173,7 +192,7 @@ function getEvents(req, res) {
 
 		cacheHit: function (result) {
 			let eventsResults = (Date.now() - result.rows[0].created_at);
-			if(eventsResults > timeouts.events) {
+			if (eventsResults > timeouts.events) {
 				deleteData('event', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
@@ -192,23 +211,24 @@ function getEvents(req, res) {
 						const summary = new Event(date);
 						summary.save(req.query.data.id);
 						return summary;
-					});				
-			res.send(eventSummaries);				})
-	}
+					});
+					res.send(eventSummaries);
+				})
+		}
 	})
 }
 
 
 function getYelps(req, res) {
-		lookupData({
+	lookupData({
 		tableName: 'yelps',
 		//this is because in schema we modified table to have a location_id column to make the tables relational.
 		column: 'location_id',
 		query: req.query.data.id,
 
-				cacheHit: function (result) {
+		cacheHit: function (result) {
 			let yelpsResults = (Date.now() - result.rows[0].created_at);
-			if(yelpsResults > timeouts.yelps) {
+			if (yelpsResults > timeouts.yelps) {
 				deleteData('yelp', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
@@ -227,9 +247,10 @@ function getYelps(req, res) {
 						const summary = new Yelp(date);
 						summary.save(req.query.data.id);
 						return summary;
-					});				
-			res.send(yelpSummaries);				})
-	}
+					});
+					res.send(yelpSummaries);
+				})
+		}
 	})
 }
 
@@ -240,9 +261,9 @@ function getMovies(req, res) {
 		column: 'location_id',
 		query: req.query.data.id,
 
-				cacheHit: function (result) {
+		cacheHit: function (result) {
 			let moviesResults = (Date.now() - result.rows[0].created_at);
-			if(moviesResults > timeouts.movies) {
+			if (moviesResults > timeouts.movies) {
 				deleteData('movie', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
@@ -261,15 +282,14 @@ function getMovies(req, res) {
 						const summary = new Movie(date);
 						summary.save(req.query.data.id);
 						return summary;
-					});				
-			res.send(movieSummaries);				})
-	}
+					});
+					res.send(movieSummaries);
+				})
+		}
 	})
 }
 
-
-
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server is listening on ${PORT}`);
+	console.log(`Server is listening on ${PORT}`);
 });
