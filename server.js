@@ -12,22 +12,46 @@ client.connect();
 const app = express();
 app.use(cors());
 
-app.get('/location', getLocation);
-app.get('/event', getEvents);
-app.get('/weather', getWeather);
-app.get('/yelp', getYelps);
-app.get('/movie', getMovies);
-
 const timeouts = {
 	weather: 15000,
 	yelp: 15000,
-	movies: 15000,
-	events: 15000,
+	movie: 15000,
+	event: 15000,
 }
+
+app.get('/location', getLocation);
+app.get('/event', getEvent);
+app.get('/weather', getWeather);
+app.get('/yelp', getYelp);
+app.get('/movies', getMovie);
 
 function convertTime(timeInMilliseconds) {
 	return new Date(timeInMilliseconds).toString().slice(0, 15);
 }
+function handleError(error, response) {
+	response.status(error.status || 500).send(error.message);
+}
+function lookupData(lookupHandler) {
+	const SQL = `SELECT * FROM ${lookupHandler.tableName} WHERE ${lookupHandler.column}=$1;`;
+	const VALUES = [lookupHandler.query];
+
+	client.query(SQL, VALUES).then(result => {
+		if(result.rowCount === 0) {
+			lookupHandler.cacheMiss();
+		} 
+		else {
+			lookupHandler.cacheHit(result);
+		}
+	});
+}
+
+function deleteData(tableName, location_id) {
+	const SQL = `DELETE FROM ${tableName} WHERE location_id=$1;`;
+	const VALUES = [location_id];
+	return client.query(SQL, VALUES);
+}
+
+
 
 function Location(query, geoData) {
 	this.search_query = query;
@@ -43,8 +67,8 @@ Location.prototype.save = function () {
 	return client.query(SQL, VALUES).then(result => {
 		this.id = result.rows[0].id;
 		return this;
-	})
-}
+	});
+};
 
 function Weather(weatherData) {
 	this.created_at = Date.now();
@@ -53,27 +77,28 @@ function Weather(weatherData) {
 }
 
 Weather.prototype.save = function (location_id) {
-	const SQL = 'INSERT INTO weather (forecast, time, created_at, location_id) VALUES($1, $2, $3, $4)';
-
+	const SQL = 'INSERT INTO weather (forecast, time, created_at, location_id) VALUES($1, $2, $3, $4);';
 	const VALUES = [this.forecast, this.time, this.created_at, location_id];
 
 	client.query(SQL, VALUES);
-}
+};
 
 function Event(eventData) {
+	this.created_at = Date.now();
 	this.link = eventData.url;
-	this.name = eventData.name;
-	this.event_date = eventData.date;
-	this.summary = eventData.summary;
+	this.name = eventData.name.text;
+	this.event_date = eventData.start.local;
+	this.summary = eventData.description.text;
 }
+
 Event.prototype.save = function(location_id){
  const SQL = 'INSERT INTO event (link, name, event_date, summary, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6)';
  const VALUES = [this.link, this.name, this.event_date, this.summary, this.created_at, location_id];
  client.query(SQL, VALUES);
-}
+};
 
 function Yelp(yelpData) {
-	created_at = Date.now();
+	this.created_at = Date.now();
 	this.name = yelpData.name;
 	this.image_url = yelpData.image_url;
 	this.price = yelpData.price;
@@ -84,15 +109,16 @@ Yelp.prototype.save = function(location_id){
  const SQL = 'INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7)';
  const VALUES = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
  client.query(SQL, VALUES);
-}
+};
 
 
 function Movie(movieData) {
+	this.created_at = Date.now();
 	this.title = movieData.title;
 	this.overview = movieData.overview;
 	this.average_votes = movieData.average_votes;
 	this.total_votes = movieData.total_votes;
-	this.image_url = movieData.image_url;
+	this.image_url = `https://image.tmdb.org/t/p/w185_and_h278_bestv2/${movieData.poster_path}`;
 	this.popularity = movieData.popularity;
 	this.release_on = movieData.release_on
 }
@@ -100,34 +126,11 @@ Movie.prototype.save = function(location_id){
  const SQL = 'INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, release_on created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)';
  const VALUES = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.release_on,this.created_at, location_id];
  client.query(SQL, VALUES);
-}
-
-function handleError(error, response) {
-	response.status(error.status || 500).send(error.message);
-}
-
-function deleteData(tableName, location_id) {
-	const SQL = 'DELETE FROM ${table} WHERE location_id=$1',
-	const VALUES = [location_id];
-	return client.query(SQL, VALUES);
-}
-
-function lookupData(lookupHandler) {
-	const SQL = `SELECT * FROM ${lookupHandler.tableName} WHERE ${lookupHandler.column}=$1`
-	const VALUES = [lookupHandler.query]
-
-	client.query(SQL, VALUES).then(result => {
-		if (result.rowCount === 0) {
-			lookupHandler.cacheMiss();
-		} else {
-			lookupHandler.cacheHit(result);
-		}
-	})
-}
+};
 
 function getLocation(req, res) {
 	lookupData({
-		tableName: 'locations',
+		tableName: 'location',
 		column: 'search_query',
 		query: req.query.data,
 
@@ -142,9 +145,9 @@ function getLocation(req, res) {
 				.then(geoData => {
 					const location = new Location(this.query, geoData.body);
 					location.save().then(location => res.send(location));
-				})
+				});
 		}
-	})
+	});
 }
 
 function getWeather(req, res) {
@@ -158,7 +161,7 @@ function getWeather(req, res) {
 			if (ageOfResults > timeouts.weather) {
 				deleteData('weather', req.query.data.id).then(() => {
 					this.cacheMiss();
-				})
+				});
 
 			} else {
 				res.send(result.rows);
@@ -166,7 +169,7 @@ function getWeather(req, res) {
 		},
 
 		cacheMiss: function () {
-			const url = 'https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}'
+			const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
 
 			superagent.get(url)
 				.then(weatherData => {
@@ -176,14 +179,14 @@ function getWeather(req, res) {
 						return summary;
 					});
 					res.send(weatherSummaries);
-				})
+				});
 		}
-	})
+	});
 }
 
-function getEvents(req, res) {
+function getEvent(req, res) {
 	lookupData({
-		tableName: 'events',
+		tableName: 'event',
 		//this is because in schema we modified table to have a location_id column to make the tables relational.
 		column: 'location_id',
 		query: req.query.data.id,
@@ -191,8 +194,8 @@ function getEvents(req, res) {
 
 
 		cacheHit: function (result) {
-			let eventsResults = (Date.now() - result.rows[0].created_at);
-			if (eventsResults > timeouts.events) {
+			let eventResults = (Date.now() - result.rows[0].created_at);
+			if (eventResults > timeouts.event) {
 				deleteData('event', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
@@ -207,28 +210,27 @@ function getEvents(req, res) {
 
 			superagent.get(url)
 				.then(eventData => {
-					const eventSummaries = eventData.body.date.data.map(date => {
-						const summary = new Event(date);
+					const eventSlice = eventData.body.events.length > 20 ? 20 : eventData.body.events.length;
+					const eventSummary = eventData.body.events.slice(0, eventSlice).map(event => {
+						const summary = new Event(event);
 						summary.save(req.query.data.id);
 						return summary;
 					});
-					res.send(eventSummaries);
-				})
-		}
-	})
+					res.send(eventSummary);
+				});
+		},
+	});
 }
 
-
-function getYelps(req, res) {
+function getYelp(req, res) {
 	lookupData({
-		tableName: 'yelps',
-		//this is because in schema we modified table to have a location_id column to make the tables relational.
+		tableName: 'yelp',
 		column: 'location_id',
 		query: req.query.data.id,
 
 		cacheHit: function (result) {
-			let yelpsResults = (Date.now() - result.rows[0].created_at);
-			if (yelpsResults > timeouts.yelps) {
+			let yelpResults = (Date.now() - result.rows[0].created_at);
+			if (yelpResults > timeouts.yelp) {
 				deleteData('yelp', req.query.data.id).then(() => {
 					this.cacheMiss();
 				})
@@ -242,31 +244,32 @@ function getYelps(req, res) {
 			const url = 'https://api.yelp.com/v3/businesses/search?location=${request.query.data.search_query}'
 
 			superagent.get(url)
+				.set('Authorization', `Bearer ${process.env.YELP_API_KEY}`)
 				.then(yelpData => {
-					const yelpSummaries = yelpData.body.date.data.map(date => {
-						const summary = new Yelp(date);
-						summary.save(req.query.data.id);
-						return summary;
+					const yelpSlice = yelpData.body.businesses.length > 20 ? 20 : yelpData.body.businesses.length;
+					const yelpBusiness= yelpData.body.businesses.slice(0, yelpSlice).map(business => {
+						const newbusiness = new Yelp(business);
+						newbusiness.save(req.query.data.id);
+						return newbusiness;
 					});
-					res.send(yelpSummaries);
-				})
-		}
-	})
+					res.send(yelpBusiness);
+				});
+		},
+	});
 }
 
-function getMovies(req, res) {
+function getMovie(req, res) {
 	lookupData({
 		tableName: 'movie',
-		//this is because in schema we modified table to have a location_id column to make the tables relational.
 		column: 'location_id',
 		query: req.query.data.id,
 
 		cacheHit: function (result) {
-			let moviesResults = (Date.now() - result.rows[0].created_at);
-			if (moviesResults > timeouts.movies) {
+			let movieResults = (Date.now() - result.rows[0].created_at);
+			if (movieResults > timeouts.movie) {
 				deleteData('movie', req.query.data.id).then(() => {
 					this.cacheMiss();
-				})
+				});
 
 			} else {
 				res.send(result.rows);
@@ -274,19 +277,20 @@ function getMovies(req, res) {
 		},
 
 		cacheMiss: function () {
-			const url = 'https://api.themoviedb.org/3/search/movie/?api_key=${process.env.MOVIE_API_KEY}&language=en-US&page=1&query=${request.query.data.search_query}'
+			const url = `https://api.themoviedb.org/3/search/movie/?api_key=${process.env.MOVIE_API_KEY}&language=en-US&page=1&query=${request.query.data.search_query}`;
 
 			superagent.get(url)
 				.then(movieData => {
-					const movieSummaries = movieData.body.date.data.map(date => {
-						const summary = new Movie(date);
-						summary.save(req.query.data.id);
-						return summary;
+					const movieSlice = movieData.body.results > 20 ? 20 : movieData.body.results.length;
+					const movieOverview = movieData.body.results.slice(0, movieSlice).map(movie => {
+						const overview = new Movie(movie);
+						overview.save(req.query.data.id);
+						return overview;
 					});
-					res.send(movieSummaries);
-				})
+					res.send(movieOverview);
+				});
 		}
-	})
+	});
 }
 
 const PORT = process.env.PORT || 3000;
