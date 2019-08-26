@@ -1,4 +1,4 @@
-DROP TABLE IF EXISTS locations,weather,events,yelps, movies;
+DROP TABLE IF EXISTS locations,weather,event,yelp, movie;
 
 CREATE TABLE locations (
   id SERIAL PRIMARY KEY,
@@ -22,7 +22,7 @@ CREATE TABLE weather (
 
 
 
-CREATE TABLE events (
+CREATE TABLE event (
   id SERIAL PRIMARY KEY,
   search_query VARCHAR(255),
   link VARCHAR (255),
@@ -33,7 +33,7 @@ CREATE TABLE events (
   created_at BIGINT
 );
 
-CREATE TABLE IF NOT EXISTS yelps (
+CREATE TABLE IF NOT EXISTS yelp (
 	id SERIAL PRIMARY KEY,
 	name VARCHAR(255),
 	image_url VARCHAR(255),
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS yelps (
 	location_id INTEGER NOT NULL REFERENCES locations(id)
 );
 
-CREATE TABLE movies (
+CREATE TABLE movie (
 	id SERIAL PRIMARY KEY,
 	title VARCHAR(255),
 	overview VARCHAR(1000),
