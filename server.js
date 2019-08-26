@@ -23,7 +23,7 @@ app.get('/location', getLocation);
 app.get('/event', getEvent);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelp);
-app.get('/movies', getMovie);
+app.get('/movie', getMovie);
 
 function convertTime(timeInMilliseconds) {
 	return new Date(timeInMilliseconds).toString().slice(0, 15);
@@ -106,7 +106,7 @@ function Yelp(yelpData) {
 	this.url = yelpData.url;
 }
 Yelp.prototype.save = function(location_id){
- const SQL = 'INSERT INTO yelps (name, image_url, price, rating, url, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7)';
+ const SQL = 'INSERT INTO yelp (name, image_url, price, rating, url, created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7)';
  const VALUES = [this.name, this.image_url, this.price, this.rating, this.url, this.created_at, location_id];
  client.query(SQL, VALUES);
 };
@@ -123,7 +123,7 @@ function Movie(movieData) {
 	this.release_on = movieData.release_on
 }
 Movie.prototype.save = function(location_id){
- const SQL = 'INSERT INTO movies (title, overview, average_votes, total_votes, image_url, popularity, release_on created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)';
+ const SQL = 'INSERT INTO movie (title, overview, average_votes, total_votes, image_url, popularity, release_on created_at, location_id) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)';
  const VALUES = [this.title, this.overview, this.average_votes, this.total_votes, this.image_url, this.popularity, this.release_on,this.created_at, location_id];
  client.query(SQL, VALUES);
 };
@@ -206,12 +206,12 @@ function getEvent(req, res) {
 		},
 
 		cacheMiss: function () {
-			const url = 'https://www.eventbriteapi.com/v3/events/search?token=${process.env.EVENTBRITE_API_KEY}&location.address=${request.query.data.formatted_query}'
+			const url = 'https://www.eventbriteapi.com/v3/event/search?token=${process.env.EVENTBRITE_API_KEY}&location.address=${request.query.data.formatted_query}'
 
 			superagent.get(url)
 				.then(eventData => {
-					const eventSlice = eventData.body.events.length > 20 ? 20 : eventData.body.events.length;
-					const eventSummary = eventData.body.events.slice(0, eventSlice).map(event => {
+					const eventSlice = eventData.body.events.length > 20 ? 20 : eventData.body.event.length;
+					const eventSummary = eventData.body.event.slice(0, eventSlice).map(event => {
 						const summary = new Event(event);
 						summary.save(req.query.data.id);
 						return summary;
