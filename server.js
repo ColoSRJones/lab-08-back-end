@@ -221,6 +221,7 @@ function getEvents(req, res){
   });
 }
 
+
 function getYelps(req, res){
   lookupData({
     tableName: 'yelps',
