@@ -130,7 +130,7 @@ Movie.prototype.save = function(location_id){
 
 function getLocation(req, res) {
 	lookupData({
-		tableName: 'location',
+		tableName: 'locations',
 		column: 'search_query',
 		query: req.query.data,
 
