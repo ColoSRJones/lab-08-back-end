@@ -205,7 +205,7 @@ function getEvents(req, res){
     },
 
     cacheMiss: function() {
-      const url = `https://www.eventbriteapi.com/v3/events/search/?token=${process.env.EVENTBRITE_API_KEY}&location.address=${req.query.data.search_query}&location.within=10km`;
+      const url = `https://www.eventbriteapi.com/v3/events/search?token=${process.env.EVENTBRITE_API_KEY}&location.address=${request.query.data.formatted_query}`;
 
       superagent.get(url)
         .then(eventData => {
