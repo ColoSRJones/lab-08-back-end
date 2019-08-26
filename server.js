@@ -206,6 +206,9 @@ function getEvents(req, res){
     },
 
     cacheMiss: function() {
+
+			//For some reason eventbrite doesn't like you api key. I dont know why.
+			//Try getting a new key
       const url = `https://www.eventbriteapi.com/v3/events/search?token=${process.env.EVENTBRITE_API_KEY}&location.address=${req.query.data.search_query}&location.within=10km`;
 
       superagent.get(url)
@@ -295,5 +298,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log('I know that you came to party baby, baby, baby, baby');
 });
-
-
