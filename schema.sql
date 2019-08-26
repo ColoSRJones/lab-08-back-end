@@ -22,7 +22,7 @@ CREATE TABLE weather (
 
 
 
-CREATE TABLE event (
+CREATE TABLE events (
   id SERIAL PRIMARY KEY,
   search_query VARCHAR(255),
   link VARCHAR (255),
@@ -33,7 +33,7 @@ CREATE TABLE event (
   created_at BIGINT
 );
 
-CREATE TABLE IF NOT EXISTS yelp (
+CREATE TABLE IF NOT EXISTS yelps (
 	id SERIAL PRIMARY KEY,
 	name VARCHAR(255),
 	image_url VARCHAR(255),
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS yelp (
 	location_id INTEGER NOT NULL REFERENCES locations(id)
 );
 
-CREATE TABLE movie (
+CREATE TABLE movies (
 	id SERIAL PRIMARY KEY,
 	title VARCHAR(255),
 	overview VARCHAR(1000),
