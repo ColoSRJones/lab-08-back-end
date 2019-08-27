@@ -205,9 +205,10 @@ function getEvents(req, res){
     },
 
     cacheMiss: function() {
-      const url = `https://www.eventbriteapi.com/v3/events/search/?token=${process.env.EVENTBRITE_API_KEY}&location.latitude=${request.query.data.latitude}&location.longitude=${request.query.data.longitude}&location.within=10km`;
+      const url = `https://www.eventbriteapi.com/v3/events/search?location.latitude=${request.query.data.latitude}&location.longitude=${request.query.data.longitude}&location.within=10km`;
 
       superagent.get(url)
+			.set('Authorization', `Bearer ${process.env.EVENTBRITE_API_KEY}`)
         .then(eventData => {
           const sliceIndex = eventData.body.events.length > 20 ? 20 : eventData.body.events.length;
           const eventSummaries = eventData.body.events.slice(0, sliceIndex).map(event => {
