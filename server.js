@@ -55,25 +55,6 @@ function deleteData(tableName, location_id) {
   return client.query(SQL, VALUES);
 }
 
-function getTrails(request, response) {
-  //Object literal with 3 properperties
-  const locationHandler = {
-    location: request.query.data,
-
-    cacheHit: (results) => {
-      console.log('Got data from SQL');
-      response.send(results.rows[0]);
-    },
-
-    cacheMiss: () => {
-      Trail.fetch(request.query.data)
-        .then(data => response.send(data));
-    },
-  };
-
-  Trail.lookup(locationHandler);
-}
-
 function Location(query, geoData) {
   this.search_query = query;
   this.formatted_query = geoData.results[0].formatted_address;
@@ -153,60 +134,62 @@ Movie.prototype.save = function(location_id) {
   client.query(SQL, VALUES);
 };
 
-function Trail(hike) {
-  this.trail_url = hike.url;
-  this.name = hike.name;
-  this.location = hike.location;
-  this.length = hike.length;
-  this.condition_date = hike.conditionDate.split(' ')[0];
-  this.condition_time = hike.conditionDate.split(' ')[1];
-  this.conditions = hike.conditionDetails;
-  this.stars = hike.stars;
-  this.star_votes = hike.starVotes;
-  this.summary = hike.summary;
+function Trail(hikeData) {
+  this.trail_url = hikeData.url;
+  this.name = hikeData.name;
+  this.location = hikeData.location;
+  this.length = hikeData.length;
+  this.condition_date = hikeData.conditionDate.split(' ')[0];
+  this.condition_time = hikeData.conditionDate.split(' ')[1];
+  this.conditions = hikeData.conditionDetails;
+  this.stars = hikeData.stars;
+  this.star_votes = hikeData.starVotes;
+  this.summary = hikeData.summary;
 }
 
-Trail.prototype.save = function(id) {
+Trail.prototype.save = function(location_id) {
   const SQL = `INSERT INTO trails 
     (trail_url, name, location, length, condition_date, condition_time, conditions, stars, star_votes, summary, location_id) 
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`;
-  const values = Object.values(this);
-  values.push(id);
-  client.query(SQL, values);
+  const VALUES = [this.trail_url, this.name, this.length, this.condition_date, this.condition_time, this.conditions, this.stars, this.star_votes, this.summary, location_id];
+
+  client.query(SQL, VALUES);
 };
 
-Trail.fetch = function(location) {
-  const url = `https://www.hikingproject.com/data/get-trails?lat=${location.latitude}&lon=${location.longitude}&key=${process.env.HIKING_API_KEY}`;
+function getTrails(req, res){
+	lookupData({
+		tableName: 'trails',
+		column: 'locations_id',
+		query: req.query.data.id,
 
-  return superagent.get(url)
-    .set('Authorization', `Bearer ${process.env.HIKING_API_KEY}`)
-    .then((trailResponse) => {
-      const trailReviews = trailResponse.body.trails.map((trails) => {
-        const trailSummary = new Trail(trails);
-        trailSummary.save(location.id);
-        return trailSummary;
-      });
-      return trailReviews;
-    })
-    .catch((error) => handleError(error));
+		cacheHit: function
+		(result){
+			let ageOfResults = (Date.now() - result.row[0].created_at);
+			if(ageOfResults > timeouts.trails){
+				deleteData('trails',req.query.data.id).then(()=> {
+					this.cacheMiss();
+				});
+			} else {
+				res.send(result.rows);
+			}
+		},
+
+    cacheMiss: function() {
+      const url = `https://api.themoviedb.org/3/search/movie/?api_key=${process.env.MOVIE_API_KEY}&language=en-US&page=1&query=${req.query.data.search_query}`;
+
+      superagent.get(url)
+        .then(trailData => {
+          const sliceTrail = trailData.body.results > 20 ? 20 : trailData.body.results.length;
+          const trailSum = trailData.body.results.slice(0, sliceTrail).map(trail => {
+            const summary = new Trail(trail);
+            summary.save(req.query.data.id);
+            return summary;
+          });
+          res.send(trailSum);
+        });
+    },
+		});
 }
-
-Trail.lookup = function(handler) {
-  const SQL = `SELECT * FROM trails WHERE location_id=$1;`;
-  client.query(SQL, [handler.location.id])
-    .then(result => {
-      if ( result.rowCount > 0 ) {
-        console.log('Got data from SQL');
-        handler.cacheHit(result);
-      }
-      else {
-        console.log('Got data from API');
-        handler.cacheMiss();
-      }
-    })
-    .catch(error => handleError(error));
-};
-
 
 function getLocation(req, res){
   lookupData({
