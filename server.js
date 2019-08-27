@@ -17,6 +17,7 @@ const timeouts = {
   yelp: 86400000,
   events: 86400000,
   movies: 86400000,
+	trails: 86400000,
 };
 
 app.get('/location', getLocation);
@@ -24,6 +25,7 @@ app.get('/events', getEvents);
 app.get('/weather', getWeather);
 app.get('/yelp', getYelps);
 app.get('/movies', getMovies);
+app.get('/trails', getTrails);
 
 function convertTime(timeInMilliseconds) {
   return new Date(timeInMilliseconds).toString().slice(0, 15);
@@ -131,6 +133,25 @@ Movie.prototype.save = function(location_id) {
 
   client.query(SQL, VALUES);
 };
+
+function Trail(locationId, trailData) {
+    this.location_id = locationId;
+    this.name = trailData.name;
+    this.location = trailData.location;
+    this.length = trailData.length;
+    this.stars = trailData.stars;
+    this.star_votes = trailData.starVotes;
+    this.summary = trailData.summary;
+    this.trail_url = trailData.url;
+    this.conditions = `${trailData.conditionStatus}: ${trailData.conditionDetails}`;
+    const splitDate = trailData.conditionDate.split(' ');
+    this.condition_date = splitDate[0];
+    this.condition_time = splitDate[1];
+  }
+
+  Trail.prototype.save = function () {
+    insertInto('trails', this);
+  };
 
 function getLocation(req, res){
   lookupData({
@@ -285,6 +306,40 @@ function getMovies(req, res){
             return summary;
           });
           res.send(movies);
+        });
+    },
+  });
+}
+
+function getTrails(req, res){
+  lookupData({
+    tableName: 'trails',
+    column: 'location_id',
+    query: req.query.data.id,
+
+    cacheHit: function(result) {
+      let ageOfResults = (Date.now() - result.rows[0].created_at);
+      if(ageOfResults > timeouts.trails){
+        deleteData('trails', req.query.data.id).then(() => {
+          this.cacheMiss();
+        });
+      } else {
+        res.send(result.rows);
+      }
+    },
+
+    cacheMiss: function() {
+      const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.TRAILS_API_KEY}`;
+
+      superagent.get(url)
+        .then(trailsData => {
+          const sliceIndex = trailsData.body.results > 20 ? 20 : trailsData.body.results.length;
+          const trailsSlice = trailsSlice.body.results.slice(0, sliceIndex).map(trails => {
+            const trailSummary = new Trail(trails);
+            trailSummary.save(req.query.data.id);
+            return trailSummary;
+          });
+          res.send(trailsData);
         });
     },
   });
