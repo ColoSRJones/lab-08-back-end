@@ -53,16 +53,16 @@ CREATE TABLE movies (
 );
 CREATE TABLE trails (
   id SERIAL PRIMARY KEY,
-  created_at BIGINT,
+  trail_url VARCHAR(2083),
   name VARCHAR(255),
   location VARCHAR(255),
-  length FLOAT,
-  stars FLOAT,
-  star_votes INTEGER,
-  summary VARCHAR(10000),
-  trail_url VARCHAR(1000),
-  conditions VARCHAR(500),
-  condition_date VARCHAR(10),
-  condition_time VARCHAR(10),
-  location_id INTEGER NOT NULL REFERENCES locations(id)
+  length NUMERIC(4, 1),
+  condition_date VARCHAR(255),
+  condition_time VARCHAR(255),
+  conditions VARCHAR(255),
+  stars NUMERIC(2, 1),
+  star_votes INTEGER NOT NULL,
+  summary VARCHAR(255),
+  location_id INTEGER NOT NULL,
+  FOREIGN KEY (location_id) REFERENCES locations (id)
 );

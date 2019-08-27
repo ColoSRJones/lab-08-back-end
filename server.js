@@ -55,6 +55,25 @@ function deleteData(tableName, location_id) {
   return client.query(SQL, VALUES);
 }
 
+function getTrails(request, response) {
+  //Object literal with 3 properperties
+  const locationHandler = {
+    location: request.query.data,
+
+    cacheHit: (results) => {
+      console.log('Got data from SQL');
+      response.send(results.rows[0]);
+    },
+
+    cacheMiss: () => {
+      Trail.fetch(request.query.data)
+        .then(data => response.send(data));
+    },
+  };
+
+  Trail.lookup(locationHandler);
+}
+
 function Location(query, geoData) {
   this.search_query = query;
   this.formatted_query = geoData.results[0].formatted_address;
@@ -134,24 +153,60 @@ Movie.prototype.save = function(location_id) {
   client.query(SQL, VALUES);
 };
 
-function Trail(locationId, trailData) {
-    this.location_id = locationId;
-    this.name = trailData.name;
-    this.location = trailData.location;
-    this.length = trailData.length;
-    this.stars = trailData.stars;
-    this.star_votes = trailData.starVotes;
-    this.summary = trailData.summary;
-    this.trail_url = trailData.url;
-    this.conditions = `${trailData.conditionStatus}: ${trailData.conditionDetails}`;
-    const splitDate = trailData.conditionDate.split(' ');
-    this.condition_date = splitDate[0];
-    this.condition_time = splitDate[1];
-  }
+function Trail(hike) {
+  this.trail_url = hike.url;
+  this.name = hike.name;
+  this.location = hike.location;
+  this.length = hike.length;
+  this.condition_date = hike.conditionDate.split(' ')[0];
+  this.condition_time = hike.conditionDate.split(' ')[1];
+  this.conditions = hike.conditionDetails;
+  this.stars = hike.stars;
+  this.star_votes = hike.starVotes;
+  this.summary = hike.summary;
+}
 
-  Trail.prototype.save = function () {
-    insertInto('trails', this);
-  };
+Trail.prototype.save = function(id) {
+  const SQL = `INSERT INTO trails 
+    (trail_url, name, location, length, condition_date, condition_time, conditions, stars, star_votes, summary, location_id) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`;
+  const values = Object.values(this);
+  values.push(id);
+  client.query(SQL, values);
+};
+
+Trail.fetch = function(location) {
+  const url = `https://www.hikingproject.com/data/get-trails?lat=${location.latitude}&lon=${location.longitude}&key=${process.env.HIKING_API_KEY}`;
+
+  return superagent.get(url)
+    .set('Authorization', `Bearer ${process.env.HIKING_API_KEY}`)
+    .then((trailResponse) => {
+      const trailReviews = trailResponse.body.trails.map((trails) => {
+        const trailSummary = new Trail(trails);
+        trailSummary.save(location.id);
+        return trailSummary;
+      });
+      return trailReviews;
+    })
+    .catch((error) => handleError(error));
+}
+
+Trail.lookup = function(handler) {
+  const SQL = `SELECT * FROM trails WHERE location_id=$1;`;
+  client.query(SQL, [handler.location.id])
+    .then(result => {
+      if ( result.rowCount > 0 ) {
+        console.log('Got data from SQL');
+        handler.cacheHit(result);
+      }
+      else {
+        console.log('Got data from API');
+        handler.cacheMiss();
+      }
+    })
+    .catch(error => handleError(error));
+};
+
 
 function getLocation(req, res){
   lookupData({
@@ -250,7 +305,7 @@ function getYelps(req, res){
 
     cacheHit: function(result) {
       let ageOfResults = (Date.now() - result.rows[0].created_at);
-      if(ageOfResults > timeouts.events){
+      if(ageOfResults > timeouts.yelps){
         deleteData('yelps', req.query.data.id).then(() => {
           this.cacheMiss();
         });
@@ -285,7 +340,7 @@ function getMovies(req, res){
 
     cacheHit: function(result) {
       let ageOfResults = (Date.now() - result.rows[0].created_at);
-      if(ageOfResults > timeouts.events){
+      if(ageOfResults > timeouts.movies){
         deleteData('movies', req.query.data.id).then(() => {
           this.cacheMiss();
         });
@@ -306,40 +361,6 @@ function getMovies(req, res){
             return summary;
           });
           res.send(movies);
-        });
-    },
-  });
-}
-
-function getTrails(req, res){
-  lookupData({
-    tableName: 'trails',
-    column: 'location_id',
-    query: req.query.data.id,
-
-    cacheHit: function(result) {
-      let ageOfResults = (Date.now() - result.rows[0].created_at);
-      if(ageOfResults > timeouts.trails){
-        deleteData('trails', req.query.data.id).then(() => {
-          this.cacheMiss();
-        });
-      } else {
-        res.send(result.rows);
-      }
-    },
-
-    cacheMiss: function() {
-      const url = `https://www.hikingproject.com/data/get-trails?lat=${request.query.data.latitude}&lon=${request.query.data.longitude}&maxDistance=10&key=${process.env.TRAILS_API_KEY}`;
-
-      superagent.get(url)
-        .then(trailsData => {
-          const sliceIndex = trailsData.body.results > 20 ? 20 : trailsData.body.results.length;
-          const trailsSlice = trailsSlice.body.results.slice(0, sliceIndex).map(trails => {
-            const trailSummary = new Trail(trails);
-            trailSummary.save(req.query.data.id);
-            return trailSummary;
-          });
-          res.send(trailsData);
         });
     },
   });
